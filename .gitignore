@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.dist-info/
+
+# Virtual env
+.venv/
+venv/
+
+# SQLite / local data
+*.db
+*.sqlite3
+
+# Envs & secrets
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Editors/IDE
+.vscode/
+.idea/

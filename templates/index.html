@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Policies</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;margin:2rem}
+  input,button{font:inherit;padding:.5rem .75rem}
+  table{border-collapse:collapse;width:100%;margin-top:1rem}
+  th,td{border-bottom:1px solid #ddd;padding:.5rem;text-align:left}
+  form.inline>*{margin-right:.5rem}
+</style>
+
+<h1>Policies</h1>
+
+<form class="inline" onsubmit="event.preventDefault(); add();">
+  <input id="number" placeholder="number">
+  <input id="holder" placeholder="holder">
+  <input id="premium" type="number" step="0.01" placeholder="premium">
+  <input id="status" placeholder="status">
+  <button>Add</button>
+</form>
+
+<form class="inline" method="get">
+  <input name="q" value="{{ q }}" placeholder="search">
+  <button>Search</button>
+</form>
+
+<table>
+  <thead><tr><th>#</th><th>Number</th><th>Holder</th><th>Premium</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for p in items %}
+    <tr><td>{{p.id}}</td><td>{{p.number}}</td><td>{{p.holder}}</td><td>{{"%.2f"|format(p.premium)}}</td><td>{{p.status}}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<script>
+async function add(){
+  const body = {
+    number: document.getElementById('number').value,
+    holder: document.getElementById('holder').value,
+    premium: parseFloat(document.getElementById('premium').value),
+    status: document.getElementById('status').value
+  };
+  const res = await fetch('/policies', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if(res.ok){ location.reload(); } else { alert('Failed'); }
+}
+</script>
