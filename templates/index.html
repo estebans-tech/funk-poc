@@ -101,3 +101,27 @@ document.addEventListener('click', async (e) => {
   show('error', `Delete failed (${res.status}) ${detail}`);
 });
 </script>
+<script>
+// Sortering på rubriker: bygger URL med ?sort= & dir=
+document.querySelectorAll('th[data-sort]').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const params = new URLSearchParams(window.location.search);
+    const currentSort = params.get('sort') || 'id';
+    const currentDir = (params.get('dir') || 'desc').toLowerCase();
+    const nextSort = th.dataset.sort;
+    const nextDir = (currentSort === nextSort && currentDir === 'desc') ? 'asc' : 'desc';
+    params.set('sort', nextSort);
+    params.set('dir', nextDir);
+    window.location.search = params.toString();
+  });
+});
+
+// Markera aktuell sortering när sidan laddar
+(function markSort(){
+  const p = new URLSearchParams(window.location.search);
+  const s = (p.get('sort')||'id').toLowerCase();
+  const d = (p.get('dir')||'desc').toLowerCase();
+  const th = document.querySelector(`th[data-sort="${s}"]`);
+  if(th){ th.classList.add(d === 'asc' ? 'asc' : 'desc'); }
+})();
+</script>

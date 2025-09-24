@@ -11,3 +11,17 @@ form.inline>*{margin-right:.5rem}
 .title{margin:0}
 .header-actions{margin-left:auto;display:flex;gap:.5rem}
 .key-input{width:16rem}
+
+/* Status chips */
+.status { padding:.15rem .45rem; border-radius:999px; font-size:.8rem; display:inline-block; border:1px solid transparent }
+.status.active{ background:#e6fbec; color:#065f46; border-color:#a7f3d0 }
+.status.pending{ background:#fff7ed; color:#92400e; border-color:#fed7aa }
+.status.cancelled{ background:#fee2e2; color:#991b1b; border-color:#fecaca }
+
+/* Delete button */
+.btn-del{ padding:.25rem .5rem; border:1px solid #e5e7eb; background:#fff; cursor:pointer; border-radius:6px }
+.btn-del:hover{ background:#fee; border-color:#fca5a5 }
+
+th[data-sort]{cursor:pointer; user-select:none}
+th[data-sort].asc::after{content:" ↑"; font-weight:normal}
+th[data-sort].desc::after{content:" ↓"; font-weight:normal}
