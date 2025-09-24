@@ -89,10 +89,10 @@ def apply_search_and_sort(query, q: Optional[str], sort: str, direction: str):
     return query
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, q: Optional[str] = None):
+def index(request: Request, q: Optional[str] = None, sort: str = "id", dir: str = "desc"):
     with SessionLocal() as db:
         query = db.query(PolicyDB)
-        query = apply_search_and_sort(query, q, sort="id", direction="desc")
+        query = apply_search_and_sort(query, q, sort=sort, direction=dir)
         items = query.all()
     return templates.TemplateResponse("index.html", {"request": request, "items": items, "q": q or ""})
 
