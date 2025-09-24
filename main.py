@@ -1,10 +1,11 @@
-from fastapi import FastAPI, Request, Query
+from fastapi import FastAPI, Request, Query, HTTPException, Response, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from sqlalchemy import create_engine, Column, Integer, String, Float, text
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.exc import IntegrityError
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -22,8 +23,6 @@ class PolicyDB(Base):
     status = Column(String, index=True)
 
 Base.metadata.create_all(bind=engine)
-
-# säkerställ unikt index (om gammal db saknar det)
 with engine.begin() as conn:
     conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uniq_policy_number ON policies(number);"))
 
@@ -38,41 +37,51 @@ class PolicyOut(PolicyIn):
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, q: Optional[str] = None):
-    db = SessionLocal()
-    query = db.query(PolicyDB)
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            (PolicyDB.number.like(like)) |
-            (PolicyDB.holder.like(like)) |
-            (PolicyDB.status.like(like))
-        )
-    items = query.order_by(PolicyDB.id.desc()).all()
+    with SessionLocal() as db:
+        query = db.query(PolicyDB)
+        if q:
+            like = f"%{q}%"
+            query = query.filter(
+                (PolicyDB.number.like(like)) |
+                (PolicyDB.holder.like(like)) |
+                (PolicyDB.status.like(like))
+            )
+        items = query.order_by(PolicyDB.id.desc()).all()
     return templates.TemplateResponse("index.html", {"request": request, "items": items, "q": q or ""})
 
 @app.get("/policies", response_model=List[PolicyOut])
 def list_policies(
+    response: Response,
     q: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    db = SessionLocal()
-    query = db.query(PolicyDB)
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            (PolicyDB.number.like(like)) |
-            (PolicyDB.holder.like(like)) |
-            (PolicyDB.status.like(like))
-        )
-    rows = query.order_by(PolicyDB.id.desc()).offset(offset).limit(limit).all()
+    with SessionLocal() as db:
+        query = db.query(PolicyDB)
+        if q:
+            like = f"%{q}%"
+            query = query.filter(
+                (PolicyDB.number.like(like)) |
+                (PolicyDB.holder.like(like)) |
+                (PolicyDB.status.like(like))
+            )
+        total = query.count()
+        rows = query.order_by(PolicyDB.id.desc()).offset(offset).limit(limit).all()
+
+    end = min(offset + limit - 1, max(total - 1, 0))
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["Content-Range"] = f"policies {offset}-{end}/{total}"
     return [PolicyOut(id=r.id, number=r.number, holder=r.holder, premium=r.premium, status=r.status) for r in rows]
 
-@app.post("/policies", response_model=PolicyOut)
+@app.post("/policies", response_model=PolicyOut, status_code=status.HTTP_201_CREATED)
 def create_policy(p: PolicyIn):
-    db = SessionLocal()
-    row = PolicyDB(**p.model_dump())
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return PolicyOut(id=row.id, **p.model_dump())
+    with SessionLocal() as db:
+        row = PolicyDB(**p.model_dump())
+        db.add(row)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Policy number already exists")
+        db.refresh(row)
+        return PolicyOut(id=row.id, **p.model_dump())
