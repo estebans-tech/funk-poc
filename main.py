@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, Query, HTTPException, Response, status, Depends, Header
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -12,6 +13,7 @@ APP_VERSION = "0.1.0"
 
 app = FastAPI(title="funk-poc", version=APP_VERSION)
 templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 engine = create_engine("sqlite:///./policies.db", connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)

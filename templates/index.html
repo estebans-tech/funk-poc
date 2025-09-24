@@ -1,21 +1,26 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Policies</title>
-<style>
-  body{font-family:-apple-system,system-ui,sans-serif;margin:2rem}
-  input,button{font:inherit;padding:.5rem .75rem}
-  table{border-collapse:collapse;width:100%;margin-top:1rem}
-  th,td{border-bottom:1px solid #ddd;padding:.5rem;text-align:left}
-  form.inline>*{margin-right:.5rem}
-</style>
+<link rel="stylesheet" href="/static/styles.css">
 
-<h1>Policies</h1>
+<header>
+  <h1 class="title">Policies</h1>
+  <span id="health" class="pill">health: …</span>
+  <span id="auth" class="pill">auth: off</span>
+  <span class="header-actions">
+    <input id="apikey" class="key-input" placeholder="X-API-Key (optional)">
+    <button id="saveKey">Save key</button>
+    <button id="clearKey">Clear</button>
+  </span>
+</header>
+
+<div id="msg" class="banner"></div>
 
 <form class="inline" onsubmit="event.preventDefault(); add();">
-  <input id="number" placeholder="number">
-  <input id="holder" placeholder="holder">
-  <input id="premium" type="number" step="0.01" placeholder="premium">
-  <input id="status" placeholder="status">
+  <input id="number" placeholder="number" required minlength="3">
+  <input id="holder" placeholder="holder" required minlength="2">
+  <input id="premium" type="number" step="0.01" min="0" placeholder="premium" required>
+  <input id="status" placeholder="status" required minlength="2">
   <button>Add</button>
 </form>
 
@@ -48,18 +53,53 @@
 </table>
 
 <script>
+const msg = document.getElementById('msg');
+
+function show(type, text){
+  msg.className = 'banner ' + (type || 'error');
+  msg.textContent = text;
+}
+
 async function add(){
+  const apiKey = localStorage.getItem('API_KEY');
   const body = {
-    number: document.getElementById('number').value,
-    holder: document.getElementById('holder').value,
+    number: document.getElementById('number').value.trim(),
+    holder: document.getElementById('holder').value.trim(),
     premium: parseFloat(document.getElementById('premium').value),
-    status: document.getElementById('status').value
+    status: document.getElementById('status').value.trim()
   };
   const res = await fetch('/policies', {
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers: Object.assign({'Content-Type':'application/json'}, apiKey ? {'X-API-Key': apiKey} : {}),
     body: JSON.stringify(body)
   });
-  if(res.ok){ location.reload(); } else { alert('Failed'); }
+  if(res.ok){ location.reload(); return; }
+  let detail = '';
+  try { const j = await res.json(); detail = j.detail || JSON.stringify(j); } catch {}
+  if(res.status === 401) show('error', 'Unauthorized: missing/invalid API key.');
+  else if(res.status === 409) show('error', 'Duplicate number: that policy already exists.');
+  else if(res.status === 422) show('error', 'Validation error: ' + detail);
+  else show('error', 'Error ' + res.status + ': ' + detail);
 }
+
+async function bootstrap(){
+  try{
+    const h = await fetch('/health').then(r=>r.json());
+    document.getElementById('health').textContent = 'health: ' + (h.status || 'unknown');
+  }catch{ document.getElementById('health').textContent = 'health: error'; }
+  const saved = localStorage.getItem('API_KEY') || '';
+  document.getElementById('apikey').value = saved;
+  document.getElementById('auth').textContent = 'auth: ' + (saved ? 'key set' : 'off');
+}
+bootstrap();
+
+document.getElementById('saveKey').onclick = () => {
+  const v = document.getElementById('apikey').value.trim();
+  if(v) { localStorage.setItem('API_KEY', v); show('ok', 'API key saved in this browser.'); }
+  document.getElementById('auth').textContent = 'auth: ' + (v ? 'key set' : 'off');
+};
+document.getElementById('clearKey').onclick = () => {
+  localStorage.removeItem('API_KEY'); document.getElementById('apikey').value = '';
+  document.getElementById('auth').textContent = 'auth: off'; show('ok','API key cleared.');
+};
 </script>

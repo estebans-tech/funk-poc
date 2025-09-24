@@ -1,0 +1,13 @@
+body{font-family:-apple-system,system-ui,sans-serif;margin:2rem;max-width:1000px}
+header{display:flex;align-items:center;gap:1rem}
+input,button{font:inherit;padding:.5rem .75rem}
+table{border-collapse:collapse;width:100%;margin-top:1rem}
+th,td{border-bottom:1px solid #ddd;padding:.5rem;text-align:left}
+form.inline>*{margin-right:.5rem}
+.banner{display:none;margin:1rem 0;padding:.75rem;border-radius:8px}
+.banner.error{display:block;background:#fee;border:1px solid #f99;color:#600}
+.banner.ok{display:block;background:#efe;border:1px solid #9c9;color:#064}
+.pill{padding:.2rem .5rem;border-radius:999px;border:1px solid #ccc;font-size:.8rem}
+.title{margin:0}
+.header-actions{margin-left:auto;display:flex;gap:.5rem}
+.key-input{width:16rem}
