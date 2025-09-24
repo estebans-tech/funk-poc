@@ -62,3 +62,42 @@ document.getElementById("exportCsv").onclick = () => {
   window.location = url;
 };
 </script>
+<script>
+document.getElementById('exportCsv').onclick = async () => {
+  const apiKey = localStorage.getItem('API_KEY');
+  const q = new URLSearchParams(window.location.search).get('q') || '';
+  const url = '/policies.csv' + (q ? ('?q=' + encodeURIComponent(q)) : '');
+  const res = await fetch(url, { headers: apiKey ? { 'X-API-Key': apiKey } : {} });
+  if (!res.ok) { 
+    let detail = ''; try { const j = await res.json(); detail = j.detail || JSON.stringify(j); } catch {}
+    show('error', 'Export failed: ' + res.status + (detail?(' – ' + detail):'')); 
+    return; 
+  }
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'policies.csv';
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(a.href);
+  a.remove();
+  show('ok', 'Exported policies.csv');
+};
+</script>
+<script>
+// Delete with API key + confirmation
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-del');
+  if(!btn) return;
+  const id = btn.getAttribute('data-id');
+  if(!confirm(`Delete policy #${id}?`)) return;
+  const apiKey = localStorage.getItem('API_KEY');
+  const res = await fetch(`/policies/${id}`, {
+    method: 'DELETE',
+    headers: apiKey ? { 'X-API-Key': apiKey } : {}
+  });
+  if(res.status === 204){ location.reload(); return; }
+  let detail=''; try{ const j=await res.json(); detail=j.detail || JSON.stringify(j);}catch{}
+  show('error', `Delete failed (${res.status}) ${detail}`);
+});
+</script>
