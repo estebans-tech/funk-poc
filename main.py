@@ -1,13 +1,13 @@
-from fastapi import FastAPI, Request, Query, HTTPException, Response, status, Depends, Header
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request, Query, HTTPException, Response, status, Depends
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from sqlalchemy import create_engine, Column, Integer, String, Float, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import IntegrityError
-import os
+import os, io, csv
 
 APP_VERSION = "0.1.0"
 
@@ -40,12 +40,11 @@ class PolicyIn(BaseModel):
 class PolicyOut(PolicyIn):
     id: int
 
-# ---- Optional API key (enabled only if env var API_KEY is set) ----
+# ---- Optional API key (enabled when API_KEY env is set) ----
 def require_api_key(request: Request):
     expected = os.getenv("API_KEY")
     if not expected:
-        return True  # auth off i dev
-    # case-insensitive header-lookup, accepterar även ev. proxies
+        return True
     got = (request.headers.get("x-api-key")
            or request.headers.get("x_api_key")
            or request.headers.get("authorization", "").removeprefix("ApiKey ").strip())
@@ -66,18 +65,35 @@ def health():
 def version():
     return {"app": "funk-poc", "version": APP_VERSION}
 
+def apply_search_and_sort(query, q: Optional[str], sort: str, direction: str):
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            (PolicyDB.number.like(like)) |
+            (PolicyDB.holder.like(like)) |
+            (PolicyDB.status.like(like))
+        )
+    # safe sorting: allowlist
+    sort_map = {
+        "id": PolicyDB.id,
+        "number": PolicyDB.number,
+        "holder": PolicyDB.holder,
+        "premium": PolicyDB.premium,
+        "status": PolicyDB.status,
+    }
+    col = sort_map.get(sort.lower(), PolicyDB.id)
+    if direction.lower() == "asc":
+        query = query.order_by(col.asc())
+    else:
+        query = query.order_by(col.desc())
+    return query
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, q: Optional[str] = None):
     with SessionLocal() as db:
         query = db.query(PolicyDB)
-        if q:
-            like = f"%{q}%"
-            query = query.filter(
-                (PolicyDB.number.like(like)) |
-                (PolicyDB.holder.like(like)) |
-                (PolicyDB.status.like(like))
-            )
-        items = query.order_by(PolicyDB.id.desc()).all()
+        query = apply_search_and_sort(query, q, sort="id", direction="desc")
+        items = query.all()
     return templates.TemplateResponse("index.html", {"request": request, "items": items, "q": q or ""})
 
 @app.get("/policies", response_model=List[PolicyOut])
@@ -86,19 +102,15 @@ def list_policies(
     q: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    sort: str = Query("id"),
+    dir: str = Query("desc", pattern="^(?i)(asc|desc)$"),
     _auth=Depends(require_api_key),
 ):
     with SessionLocal() as db:
         query = db.query(PolicyDB)
-        if q:
-            like = f"%{q}%"
-            query = query.filter(
-                (PolicyDB.number.like(like)) |
-                (PolicyDB.holder.like(like)) |
-                (PolicyDB.status.like(like))
-            )
+        query = apply_search_and_sort(query, q, sort=sort, direction=dir)
         total = query.count()
-        rows = query.order_by(PolicyDB.id.desc()).offset(offset).limit(limit).all()
+        rows = query.offset(offset).limit(limit).all()
 
     end = min(offset + limit - 1, max(total - 1, 0))
     response.headers["X-Total-Count"] = str(total)
@@ -125,3 +137,25 @@ def create_policy(p: PolicyIn, _auth=Depends(require_api_key)):
             raise HTTPException(status_code=409, detail="Policy number already exists")
         db.refresh(row)
         return PolicyOut(id=row.id, **p.model_dump())
+
+@app.get("/policies.csv")
+def export_policies_csv(
+    q: Optional[str] = None,
+    sort: str = Query("id"),
+    dir: str = Query("desc", pattern="^(?i)(asc|desc)$"),
+    _auth=Depends(require_api_key),
+):
+    with SessionLocal() as db:
+        query = db.query(PolicyDB)
+        query = apply_search_and_sort(query, q, sort=sort, direction=dir)
+        rows = query.all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["id", "number", "holder", "premium", "status"])
+    for r in rows:
+        writer.writerow([r.id, r.number, r.holder, f"{r.premium:.2f}", r.status])
+    buf.seek(0)
+
+    headers = {"Content-Disposition": 'attachment; filename="policies.csv"'}
+    return StreamingResponse(buf, media_type="text/csv; charset=utf-8", headers=headers)

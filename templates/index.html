@@ -29,6 +29,8 @@
   <button>Search</button>
 </form>
 
+<button id="exportCsv" style="margin-top:.5rem">Export CSV</button>
+
 <table>
   <thead>
     <tr>
@@ -52,4 +54,11 @@
   </tbody>
 </table>
 
-<script src="/static/app.js" defer></script>
+<script src="/static/app.js" defer>
+// CSV export
+document.getElementById("exportCsv").onclick = () => {
+  const q = new URLSearchParams(window.location.search).get("q") || "";
+  const url = "/policies.csv" + (q ? ("?q="+encodeURIComponent(q)) : "");
+  window.location = url;
+};
+</script>

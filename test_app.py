@@ -29,3 +29,17 @@ def test_pagination_headers():
     assert r.status_code == 200
     assert r.headers.get("X-Total-Count") == "3"
     assert r.headers.get("Content-Range", "").startswith("policies 0-1/3")
+
+def test_csv_export_and_sorting():
+    c = client()
+    # seed
+    for i, prem in [("A-1", 5.0), ("B-2", 3.0), ("C-3", 7.5)]:
+        c.post("/policies", json={"number":i,"holder":"Ho","premium":prem,"status":"active"})
+    r = c.get("/policies.csv?sort=premium&dir=asc")
+    assert r.status_code == 200
+    assert r.headers.get("content-type","").startswith("text/csv")
+    text = r.text.strip().splitlines()
+    # header + 3 rows, and first data row should be premium=3.00
+    assert text[0].startswith("id,number,holder,premium,status")
+    assert any(",3.00," in line for line in text[1:])
+

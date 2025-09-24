@@ -22,3 +22,11 @@ uvicorn main:app --reload
 - `make seed` – fyll demo-data
 - `make test` – kör pytest
 - `make fmt` – autoformat (black)
+
+## Export & Sortering
+- `GET /policies.csv` – export av nuvarande dataset (stöd för `q`, `sort`, `dir`).
+- `GET /policies` – stödjer `?q=<text>&sort=<id|number|holder|premium|status>&dir=<asc|desc>`.
+
+Exempel:
+```bash
+curl "http://127.0.0.1:8000/policies.csv?q=act&sort=number&dir=asc" -o policies.csv
