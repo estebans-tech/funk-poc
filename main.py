@@ -120,7 +120,7 @@ def list_policies(
 @app.get("/policies/{policy_id}", response_model=PolicyOut)
 def get_policy(policy_id: int, _auth=Depends(require_api_key)):
     with SessionLocal() as db:
-        r = db.query(PolicyDB).get(policy_id)
+        r = db.get(PolicyDB, policy_id)
         if not r:
             raise HTTPException(status_code=404, detail="Policy not found")
         return PolicyOut(id=r.id, number=r.number, holder=r.holder, premium=r.premium, status=r.status)
@@ -159,3 +159,13 @@ def export_policies_csv(
 
     headers = {"Content-Disposition": 'attachment; filename="policies.csv"'}
     return StreamingResponse(buf, media_type="text/csv; charset=utf-8", headers=headers)
+
+@app.delete("/policies/{policy_id}", status_code=204)
+def delete_policy(policy_id: int, _auth=Depends(require_api_key)):
+    with SessionLocal() as db:
+        obj = db.get(PolicyDB, policy_id)
+        if not obj:
+            raise HTTPException(status_code=404, detail="Policy not found")
+        db.delete(obj)
+        db.commit()
+        return Response(status_code=204)
