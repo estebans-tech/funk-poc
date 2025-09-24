@@ -1,5 +1,8 @@
 # funk-poc
 
+![CI](https://github.com/estebans-tech/funk-poc/actions/workflows/ci.yml/badge.svg)
+
+
 Mini-POC med FastAPI + Jinja2 + SQLite.
 
 ## Snabbstart
