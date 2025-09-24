@@ -1,10 +1,13 @@
-import tempfile
+import tempfile, os
 from fastapi.testclient import TestClient
 import main
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 def client():
+    # Se till att auth är AV i standardtester
+    os.environ.pop("API_KEY", None)
+
     tmp = tempfile.NamedTemporaryFile(delete=False)
     test_engine = create_engine(f"sqlite:///{tmp.name}", connect_args={"check_same_thread": False})
     main.engine = test_engine
@@ -32,14 +35,32 @@ def test_pagination_headers():
 
 def test_csv_export_and_sorting():
     c = client()
-    # seed
     for i, prem in [("A-1", 5.0), ("B-2", 3.0), ("C-3", 7.5)]:
         c.post("/policies", json={"number":i,"holder":"Ho","premium":prem,"status":"active"})
     r = c.get("/policies.csv?sort=premium&dir=asc")
     assert r.status_code == 200
     assert r.headers.get("content-type","").startswith("text/csv")
-    text = r.text.strip().splitlines()
-    # header + 3 rows, and first data row should be premium=3.00
-    assert text[0].startswith("id,number,holder,premium,status")
-    assert any(",3.00," in line for line in text[1:])
+    text_lines = r.text.strip().splitlines()
+    assert text_lines[0].startswith("id,number,holder,premium,status")
+    assert any(",3.00," in line for line in text_lines[1:])
 
+def test_delete_policy():
+    c = client()
+    r = c.post("/policies", json={"number":"DEL-1","holder":"Ha","premium":1,"status":"active"})
+    assert r.status_code == 201
+    pid = r.json()["id"]
+    r2 = c.delete(f"/policies/{pid}")
+    assert r2.status_code == 204
+    r3 = c.get(f"/policies/{pid}")
+    assert r3.status_code == 404
+
+def test_auth_optional_api_key():
+    # Aktivera auth för just detta test
+    os.environ["API_KEY"] = "k"
+    c = client()  # client() poppar API_KEY, så sätt efter instansiering:
+    os.environ["API_KEY"] = "k"
+    r = c.get("/policies?limit=1")
+    assert r.status_code == 401
+    r2 = c.get("/policies?limit=1", headers={"X-API-Key":"k"})
+    assert r2.status_code == 200
+    os.environ.pop("API_KEY", None)
