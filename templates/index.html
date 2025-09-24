@@ -34,11 +34,12 @@
 <table>
   <thead>
     <tr>
-      <th>#</th>
-      <th>Number</th>
-      <th>Holder</th>
-      <th>Premium</th>
-      <th>Status</th>
+      <th data-sort="id">#</th>
+      <th data-sort="number">Number</th>
+      <th data-sort="holder">Holder</th>
+      <th data-sort="premium">Premium</th>
+      <th data-sort="status">Status</th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
@@ -48,30 +49,70 @@
       <td>{{p.number}}</td>
       <td>{{p.holder}}</td>
       <td>{{"%.2f"|format(p.premium)}}</td>
-      <td>{{p.status}}</td>
+      <td><span class="status {{p.status}}">{{p.status}}</span></td>
+      <td><button class="btn-del" data-id="{{p.id}}">Delete</button></td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
 
-<script src="/static/app.js" defer>
-// CSV export
-document.getElementById("exportCsv").onclick = () => {
-  const q = new URLSearchParams(window.location.search).get("q") || "";
-  const url = "/policies.csv" + (q ? ("?q="+encodeURIComponent(q)) : "");
-  window.location = url;
-};
-</script>
 <script>
+const msg = document.getElementById('msg');
+function show(type, text){ msg.className='banner '+(type||'error'); msg.textContent=text; }
+
+// Add policy
+async function add(){
+  const apiKey = localStorage.getItem('API_KEY');
+  const body = {
+    number: document.getElementById('number').value.trim(),
+    holder: document.getElementById('holder').value.trim(),
+    premium: parseFloat(document.getElementById('premium').value),
+    status: document.getElementById('status').value.trim()
+  };
+  const res = await fetch('/policies', {
+    method:'POST',
+    headers: Object.assign({'Content-Type':'application/json'}, apiKey ? {'X-API-Key': apiKey} : {}),
+    body: JSON.stringify(body)
+  });
+  if(res.ok){ location.reload(); return; }
+  let detail=''; try{ const j=await res.json(); detail=j.detail||JSON.stringify(j);}catch{}
+  if(res.status===401) show('error','Unauthorized: missing/invalid API key.');
+  else if(res.status===409) show('error','Duplicate number: that policy already exists.');
+  else if(res.status===422) show('error','Validation error: '+detail);
+  else show('error','Error '+res.status+': '+detail);
+}
+
+// Health + auth UI state
+(async function bootstrap(){
+  try{
+    const h = await fetch('/health').then(r=>r.json());
+    document.getElementById('health').textContent = 'health: ' + (h.status || 'unknown');
+  }catch{ document.getElementById('health').textContent = 'health: error'; }
+  const saved = localStorage.getItem('API_KEY') || '';
+  document.getElementById('apikey').value = saved;
+  document.getElementById('auth').textContent = 'auth: ' + (saved ? 'key set' : 'off');
+})();
+
+document.getElementById('saveKey').onclick = () => {
+  const v = document.getElementById('apikey').value.trim();
+  if(v){ localStorage.setItem('API_KEY', v); show('ok','API key saved.'); }
+  document.getElementById('auth').textContent = 'auth: ' + (v ? 'key set' : 'off');
+};
+document.getElementById('clearKey').onclick = () => {
+  localStorage.removeItem('API_KEY'); document.getElementById('apikey').value=''; 
+  document.getElementById('auth').textContent='auth: off'; show('ok','API key cleared.');
+};
+
+// Export CSV (respekterar API key)
 document.getElementById('exportCsv').onclick = async () => {
   const apiKey = localStorage.getItem('API_KEY');
   const q = new URLSearchParams(window.location.search).get('q') || '';
   const url = '/policies.csv' + (q ? ('?q=' + encodeURIComponent(q)) : '');
   const res = await fetch(url, { headers: apiKey ? { 'X-API-Key': apiKey } : {} });
   if (!res.ok) { 
-    let detail = ''; try { const j = await res.json(); detail = j.detail || JSON.stringify(j); } catch {}
-    show('error', 'Export failed: ' + res.status + (detail?(' – ' + detail):'')); 
-    return; 
+    let detail=''; try{ const j=await res.json(); detail=j.detail||JSON.stringify(j);}catch{}
+    show('error','Export failed: ' + res.status + (detail?(' – ' + detail):'')); 
+    return;
   }
   const blob = await res.blob();
   const a = document.createElement('a');
@@ -83,9 +124,8 @@ document.getElementById('exportCsv').onclick = async () => {
   a.remove();
   show('ok', 'Exported policies.csv');
 };
-</script>
-<script>
-// Delete with API key + confirmation
+
+// Delete
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.btn-del');
   if(!btn) return;
@@ -97,12 +137,11 @@ document.addEventListener('click', async (e) => {
     headers: apiKey ? { 'X-API-Key': apiKey } : {}
   });
   if(res.status === 204){ location.reload(); return; }
-  let detail=''; try{ const j=await res.json(); detail=j.detail || JSON.stringify(j);}catch{}
+  let detail=''; try{ const j=await res.json(); detail=j.detail||JSON.stringify(j);}catch{}
   show('error', `Delete failed (${res.status}) ${detail}`);
 });
-</script>
-<script>
-// Sortering på rubriker: bygger URL med ?sort= & dir=
+
+// Header sorting (?sort=&dir=)
 document.querySelectorAll('th[data-sort]').forEach(th=>{
   th.addEventListener('click', ()=>{
     const params = new URLSearchParams(window.location.search);
@@ -115,8 +154,6 @@ document.querySelectorAll('th[data-sort]').forEach(th=>{
     window.location.search = params.toString();
   });
 });
-
-// Markera aktuell sortering när sidan laddar
 (function markSort(){
   const p = new URLSearchParams(window.location.search);
   const s = (p.get('sort')||'id').toLowerCase();
