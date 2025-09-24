@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Query, HTTPException, Response, status
+from fastapi import FastAPI, Request, Query, HTTPException, Response, status, Depends, Header
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -6,6 +6,7 @@ from typing import Optional, List
 from sqlalchemy import create_engine, Column, Integer, String, Float, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import IntegrityError
+import os
 
 APP_VERSION = "0.1.0"
 
@@ -36,6 +37,19 @@ class PolicyIn(BaseModel):
 
 class PolicyOut(PolicyIn):
     id: int
+
+# ---- Optional API key (enabled only if env var API_KEY is set) ----
+def require_api_key(request: Request):
+    expected = os.getenv("API_KEY")
+    if not expected:
+        return True  # auth off i dev
+    # case-insensitive header-lookup, accepterar även ev. proxies
+    got = (request.headers.get("x-api-key")
+           or request.headers.get("x_api_key")
+           or request.headers.get("authorization", "").removeprefix("ApiKey ").strip())
+    if got == expected:
+        return True
+    raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 @app.get("/health")
 def health():
@@ -70,6 +84,7 @@ def list_policies(
     q: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    _auth=Depends(require_api_key),
 ):
     with SessionLocal() as db:
         query = db.query(PolicyDB)
@@ -89,7 +104,7 @@ def list_policies(
     return [PolicyOut(id=r.id, number=r.number, holder=r.holder, premium=r.premium, status=r.status) for r in rows]
 
 @app.get("/policies/{policy_id}", response_model=PolicyOut)
-def get_policy(policy_id: int):
+def get_policy(policy_id: int, _auth=Depends(require_api_key)):
     with SessionLocal() as db:
         r = db.query(PolicyDB).get(policy_id)
         if not r:
@@ -97,7 +112,7 @@ def get_policy(policy_id: int):
         return PolicyOut(id=r.id, number=r.number, holder=r.holder, premium=r.premium, status=r.status)
 
 @app.post("/policies", response_model=PolicyOut, status_code=status.HTTP_201_CREATED)
-def create_policy(p: PolicyIn):
+def create_policy(p: PolicyIn, _auth=Depends(require_api_key)):
     with SessionLocal() as db:
         row = PolicyDB(**p.model_dump())
         db.add(row)
