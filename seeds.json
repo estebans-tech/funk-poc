@@ -1,0 +1,6 @@
+[
+    {"number":"FNK-2001","holder":"Ava Berg","premium":120.0,"status":"active"},
+    {"number":"FNK-2002","holder":"Noah Klein","premium":95.5,"status":"pending"},
+    {"number":"FNK-2003","holder":"Ella Vogt","premium":240.0,"status":"cancelled"}
+  ]
+  
