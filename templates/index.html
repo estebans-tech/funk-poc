@@ -25,10 +25,24 @@
 </form>
 
 <table>
-  <thead><tr><th>#</th><th>Number</th><th>Holder</th><th>Premium</th><th>Status</th></tr></thead>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Number</th>
+      <th>Holder</th>
+      <th>Premium</th>
+      <th>Status</th>
+    </tr>
+  </thead>
   <tbody>
   {% for p in items %}
-    <tr><td>{{p.id}}</td><td>{{p.number}}</td><td>{{p.holder}}</td><td>{{"%.2f"|format(p.premium)}}</td><td>{{p.status}}</td></tr>
+    <tr>
+      <td>{{p.id}}</td>
+      <td>{{p.number}}</td>
+      <td>{{p.holder}}</td>
+      <td>{{"%.2f"|format(p.premium)}}</td>
+      <td>{{p.status}}</td>
+    </tr>
   {% endfor %}
   </tbody>
 </table>
