@@ -1,15 +1,23 @@
-import { apiFetch, apiHeaders } from './api.js';
-import { show, $, msg } from './ui.js';
+import { apiFetch } from './api.js';
+import { show, $ } from './ui.js';
 
 // Health + auth pills
 async function bootstrap(){
-  try{
-    const h = await fetch('/health').then(r=>r.json());
-    $('health').textContent = 'health: ' + (h.status || 'unknown');
-  }catch{ $('health').textContent = 'health: error'; }
-  const saved = localStorage.getItem('API_KEY') || '';
-  $('apikey').value = saved;
-  $('auth').textContent = 'auth: ' + (saved ? 'key set' : 'off');
+  try {
+    const h = await fetch('/health').then(r=>r.json())
+    $('health').textContent = 'health: ' + (h.status || 'unknown')
+  } catch { $('health').textContent = 'health: error' }
+
+  // kolla serverns auth-krav (utan att skicka nyckel)
+  let serverAuth = 'open'
+  try {
+    const r = await fetch('/policies?limit=1')
+    if (r.status === 401) serverAuth = 'required'
+  } catch {}
+
+  const saved = localStorage.getItem('API_KEY') || ''
+  $('apikey').value = saved
+  $('auth').textContent = `auth: ${serverAuth}${saved ? ', key set' : ''}`
 }
 window.addEventListener('DOMContentLoaded', bootstrap);
 
@@ -19,32 +27,45 @@ $('saveKey').onclick = () => {
   if(v){ localStorage.setItem('API_KEY', v); show('ok','API key saved.'); }
   $('auth').textContent = 'auth: ' + (v ? 'key set' : 'off');
 };
+
 $('clearKey').onclick = () => {
   localStorage.removeItem('API_KEY'); $('apikey').value = '';
   $('auth').textContent = 'auth: off'; show('ok','API key cleared.');
 };
 
 // Add policy
-window.add = async function add(){
+async function add(e){
+  e?.preventDefault()
   const body = {
     number: $('number').value.trim(),
     holder: $('holder').value.trim(),
     premium: parseFloat($('premium').value),
     status: $('status').value.trim()
-  };
+  }
+
   const res = await apiFetch('/policies', {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify(body)
-  });
-  if(res.ok){ location.reload(); return; }
-  let detail=''; try{ const j=await res.json(); detail=j.detail||JSON.stringify(j);}catch{}
-  if(res.status===401) show('error','Unauthorized: missing/invalid API key.');
-  else if(res.status===409) show('error','Duplicate number: that policy already exists.');
-  else if(res.status===422) show('error','Validation error: '+detail);
-  else show('error','Error '+res.status+': '+detail);
-};
+  })
+  
+  if(res.ok){
+    location.reload();
+    return
+  }
 
+  let detail=''
+  try {
+    const j=await res.json()
+    detail=j.detail||JSON.stringify(j)
+  } catch {}
+
+  if(res.status===401) show('error','Unauthorized: missing/invalid API key.')
+  else if(res.status===409) show('error','Duplicate number: that policy already exists.')
+  else if(res.status===422) show('error','Validation error: '+detail)
+  else show('error','Error '+res.status+': '+detail)
+}
+$('addForm').addEventListener('submit', add)
 // Export CSV
 $('exportCsv').onclick = async () => {
   const q = new URLSearchParams(location.search).get('q') || '';
@@ -86,6 +107,7 @@ document.querySelectorAll('th[data-sort]').forEach(th=>{
     location.search = p.toString();
   });
 });
+
 (function markSort(){
   const p = new URLSearchParams(location.search);
   const s = (p.get('sort')||'id').toLowerCase();
